@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.625rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ===== 像素复古主题 ===== */
+:root {
+  --neko-bg: #14141f;
+  --neko-panel: #1e1e2e;
+  --neko-panel-2: #262640;
+  --neko-border-dark: #0a0a12;
+  --neko-border-light: #4a4a6a;
+  --neko-gold: #ffd24a;
+  --neko-pink: #ff8fb3;
+}
+
+body {
+  background: var(--neko-bg);
+  font-family: "Courier New", ui-monospace, Menlo, Consolas, "Microsoft YaHei",
+    monospace;
+  image-rendering: pixelated;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* 硬边像素边框（box-shadow 技法） */
+.pixel-border {
+  background: var(--neko-panel);
+  box-shadow:
+    0 -4px 0 0 var(--neko-border-light),
+    0 4px 0 0 var(--neko-border-dark),
+    -4px 0 0 0 var(--neko-border-light),
+    4px 0 0 0 var(--neko-border-dark);
+}
+
+.pixel-border-gold {
+  background: var(--neko-panel);
+  box-shadow:
+    0 -4px 0 0 var(--neko-gold),
+    0 4px 0 0 #8a6d1f,
+    -4px 0 0 0 var(--neko-gold),
+    4px 0 0 0 #8a6d1f;
+}
+
+.pixel-panel {
+  background: var(--neko-panel-2);
+  box-shadow:
+    inset 0 0 0 2px #101020,
+    0 -3px 0 0 #3a3a5c,
+    0 3px 0 0 #0c0c18,
+    -3px 0 0 0 #3a3a5c,
+    3px 0 0 0 #0c0c18;
+}
+
+.pixel-btn {
+  font-family: inherit;
+  background: #3b3b5e;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    0 -3px 0 0 #5c5c8a,
+    0 3px 0 0 #14142a,
+    -3px 0 0 0 #5c5c8a,
+    3px 0 0 0 #14142a;
+  transition: transform 0.05s steps(2), filter 0.1s;
+  user-select: none;
+}
+.pixel-btn:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+.pixel-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 -1px 0 0 #5c5c8a,
+    0 1px 0 0 #14142a,
+    -3px 0 0 0 #5c5c8a,
+    3px 0 0 0 #14142a;
+}
+.pixel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pixel-btn-gold {
+  background: #a97e1c;
+  box-shadow:
+    0 -3px 0 0 #ffd24a,
+    0 3px 0 0 #5c430a,
+    -3px 0 0 0 #ffd24a,
+    3px 0 0 0 #5c430a;
+}
+.pixel-btn-pink {
+  background: #a83258;
+  box-shadow:
+    0 -3px 0 0 #ff8fb3,
+    0 3px 0 0 #57152d,
+    -3px 0 0 0 #ff8fb3,
+    3px 0 0 0 #57152d;
+}
+
+/* 咬钩时收杆区域闪烁 */
+@keyframes bite-flash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.8); }
+}
+.bite-flash {
+  animation: bite-flash 0.35s steps(2) infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.pixel-bob {
+  animation: bob 1.2s steps(2) infinite;
+}
+
+/* 渔获日志滚动条 */
+.catch-log-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4a6a #14141f;
+}
+.catch-log-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.catch-log-scroll::-webkit-scrollbar-track {
+  background: #14141f;
+}
+.catch-log-scroll::-webkit-scrollbar-thumb {
+  background: #4a4a6a;
+}
+
+.text-gold { color: var(--neko-gold); }
+.text-rarity-common { color: #e8e8e8; }
+.text-rarity-rare { color: #5db4ff; }
+.text-rarity-epic { color: #c77dff; }
+.text-rarity-legendary { color: #ffd24a; }
