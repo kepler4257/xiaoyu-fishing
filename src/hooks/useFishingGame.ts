@@ -68,6 +68,10 @@ interface SaveData {
   stockReversion?: boolean[]
   stockCandles?: Candle[][]
   stockCosts?: number[]
+  /** 交易所历史已实现盈亏（卖出结算累计，可为负） */
+  stockRealizedPnl?: number
+  /** 历史买入总成本（历史盈亏百分比分母） */
+  stockTotalBought?: number
   companyLv?: number
   version?: number
 }
@@ -189,6 +193,17 @@ export function useFishingGame() {
   const [companyLv, setCompanyLv] = useState<number>(initCompanyLv)
   const [insiderTip, setInsiderTip] = useState<number | null>(null)
   const lastTipAt = useRef(0)
+  // 历史已实现盈亏 / 历史买入总成本（旧档缺字段从 0 起累计）
+  const initRealized =
+    typeof loaded?.stockRealizedPnl === 'number' ? loaded.stockRealizedPnl : 0
+  const initBought =
+    typeof loaded?.stockTotalBought === 'number' && loaded.stockTotalBought > 0
+      ? loaded.stockTotalBought
+      : 0
+  const realizedRef = useRef(initRealized)
+  const boughtRef = useRef(initBought)
+  const [realizedPnl, setRealizedPnl] = useState(initRealized)
+  const [totalBought, setTotalBought] = useState(initBought)
 
   const phaseRef = useRef(phase)
   phaseRef.current = phase
@@ -449,6 +464,8 @@ export function useFishingGame() {
       stockReversion: stockRef.current.reversion,
       stockCandles: stockRef.current.candles,
       stockCosts: stockRef.current.costBasis,
+      stockRealizedPnl: realizedRef.current,
+      stockTotalBought: boughtRef.current,
       companyLv,
       version: 4,
     }
@@ -639,9 +656,11 @@ export function useFishingGame() {
         setGold((g) => g - cost)
         const holdings = [...s.holdings]
         holdings[idx] += n
-        // 买入：成本按实付金额加权累计
+        // 买入：成本按实付金额加权累计；历史买入总成本累计
         const costBasis = [...s.costBasis]
         costBasis[idx] += cost
+        boughtRef.current += cost
+        setTotalBought(boughtRef.current)
         stockRef.current = { ...s, holdings, costBasis }
         setStockUi(stockRef.current)
         return { ok: true }
@@ -659,8 +678,11 @@ export function useFishingGame() {
       holdings[idx] -= n
       // 卖出：按股数比例摊薄成本；清仓归零
       const costBasis = [...s.costBasis]
-      costBasis[idx] =
-        holdings[idx] <= 0 ? 0 : (s.costBasis[idx] * (have - n)) / have
+      const costShare = (s.costBasis[idx] * n) / have
+      costBasis[idx] = holdings[idx] <= 0 ? 0 : s.costBasis[idx] - costShare
+      // 结算已实现盈亏：卖出所得 − 卖出股数对应的成本份额
+      realizedRef.current += gain - costShare
+      setRealizedPnl(realizedRef.current)
       stockRef.current = { ...s, holdings, costBasis }
       setStockUi(stockRef.current)
       return { ok: true }
@@ -734,5 +756,7 @@ export function useFishingGame() {
     setInsiderTip,
     companyLv,
     upgradeCompany,
+    stockRealizedPnl: realizedPnl,
+    stockTotalBought: totalBought,
   }
 }

@@ -170,6 +170,8 @@ export default function Home() {
             companyLv={game.companyLv}
             onUpgradeCompany={game.upgradeCompany}
             shrineBuilt={game.shrineStage >= 5}
+            realizedPnl={game.stockRealizedPnl}
+            totalBought={game.stockTotalBought}
           />
         )}
         {tab === 'codex' && <CodexSection codex={game.codex} />}

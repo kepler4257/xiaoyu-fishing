@@ -98,6 +98,8 @@ export default function StockSection({
   companyLv,
   onUpgradeCompany,
   shrineBuilt,
+  realizedPnl,
+  totalBought,
 }: {
   gold: number
   stocks: StockState
@@ -109,6 +111,10 @@ export default function StockSection({
   companyLv: number
   onUpgradeCompany: () => { ok: boolean; msg?: string }
   shrineBuilt: boolean
+  /** 历史已实现盈亏（卖出结算累计，可为负） */
+  realizedPnl: number
+  /** 历史买入总成本（历史盈亏百分比分母） */
+  totalBought: number
 }) {
   const [qtyInputs, setQtyInputs] = useState<Record<number, string>>({})
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -132,6 +138,23 @@ export default function StockSection({
   const companyMaxed = companyLv >= COMPANY_MAX_LV
   const income = companyIncome(companyLv)
   const nextName = companyNextName(companyLv)
+
+  // ---- 总盈亏汇总：浮动盈亏合计 + 相对总成本百分比（每 tick 随价格重算） ----
+  const totalBasis = stocks.costBasis.reduce((s, c) => s + c, 0)
+  const totalValue = stocks.prices.reduce(
+    (s, p, i) => s + p * stocks.holdings[i],
+    0,
+  )
+  const totalPnl = totalValue - totalBasis
+  const totalPct = totalBasis > 0 ? (totalPnl / totalBasis) * 100 : 0
+  const hasHolding = stocks.holdings.some((h) => h > 0)
+  const fmtWan = (v: number) =>
+    (Math.abs(v) / 10000).toLocaleString('zh-CN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  // 历史已实现盈亏：仅显示金额（用户要求去掉百分比）；从未交易（totalBought=0）显示 --
+  const hasTraded = totalBought > 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -187,6 +210,42 @@ export default function StockSection({
             {companyLv === 0 && '（开店！）'}
           </button>
         )}
+      </div>
+
+      {/* 总盈亏汇总 */}
+      <div className="pixel-panel flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
+        <span className="text-xs text-slate-400">📊 全部持仓</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {hasHolding ? (
+            <span
+              className={`font-mono text-sm font-bold ${
+                totalPnl >= 0 ? 'text-gold' : 'text-red-400'
+              }`}
+              title={`总成本 ${Math.round(totalBasis).toLocaleString()} 金 · 现值 ${Math.round(totalValue).toLocaleString()} 金`}
+            >
+              总盈亏 {totalPnl >= 0 ? '+' : '-'}
+              {fmtWan(totalPnl)} 万元（{totalPnl >= 0 ? '+' : '-'}
+              {Math.abs(totalPct).toFixed(1)}%）
+            </span>
+          ) : (
+            <span className="font-mono text-sm text-slate-500">总盈亏 --</span>
+          )}
+          {hasTraded ? (
+            <span
+              className={`font-mono text-sm font-bold ${
+                realizedPnl >= 0 ? 'text-gold' : 'text-red-400'
+              }`}
+              title={`历史买入总成本 ${Math.round(totalBought).toLocaleString()} 金`}
+            >
+              历史总盈亏 {realizedPnl >= 0 ? '+' : '-'}
+              {fmtWan(realizedPnl)} 万元
+            </span>
+          ) : (
+            <span className="font-mono text-sm text-slate-500">
+              历史总盈亏 --
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 股票列表 */}
