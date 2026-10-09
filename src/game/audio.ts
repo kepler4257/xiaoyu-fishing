@@ -6,6 +6,9 @@ let unlocked = false
 
 export function setMuted(m: boolean) {
   muted = m
+  // BGM 跟随音效开关：静音立即停唱，取消静音且该唱时恢复
+  if (m) bgmEl?.pause()
+  else if (songWanted) tryPlayBgm()
 }
 
 export function isMuted() {
@@ -98,55 +101,44 @@ export const sfx = {
   },
 }
 
-// ---------- 小玉的歌：神社建成后垂钓时循环的芯片摇篮曲 ----------
-// [频率, 拍数]，0 = 休止。24 拍 × 0.32s ≈ 7.7s 一循环
-const SONG: Array<[number, number]> = [
-  [659, 1], [784, 1], [880, 2], [784, 1], [659, 1],
-  [587, 1], [659, 1], [523, 2], [0, 2],
-  [659, 1], [784, 1], [880, 1], [1046, 1], [880, 2],
-  [784, 1], [659, 1], [587, 2], [523, 2],
-]
-const SONG_BEAT = 0.32
-const SONG_LEN_MS =
-  SONG.reduce((s, [, b]) => s + b, 0) * SONG_BEAT * 1000
+// ---------- 小玉的歌：神社建成后垂钓时循环播放的 BGM ----------
+// 用户提供的音频文件，<audio> 循环播放；沿用 startSong/stopSong 调用约定
+import shrineBgmUrl from '@/assets/shrine-bgm.mp3'
 
 let songWanted = false
-let songTimer: ReturnType<typeof setInterval> | null = null
+let bgmEl: HTMLAudioElement | null = null
 
-function playSongLoop() {
-  if (!audioCtx || muted) return
-  let t = 0
-  for (const [f, beats] of SONG) {
-    if (f > 0) blip(f, beats * SONG_BEAT * 0.9, 'triangle', 0.035, undefined, t)
-    t += beats * SONG_BEAT
+function getBgm(): HTMLAudioElement {
+  if (!bgmEl) {
+    bgmEl = new Audio(shrineBgmUrl)
+    bgmEl.loop = true
+    bgmEl.volume = 0.45
+    bgmEl.preload = 'auto'
   }
-  // 轻柔低音垫（每 4 拍一下）
-  const bassLen = SONG.reduce((s, [, b]) => s + b, 0) * SONG_BEAT
-  for (let bt = 0; bt < bassLen; bt += SONG_BEAT * 4) {
-    blip(131, SONG_BEAT * 1.6, 'sine', 0.045, undefined, bt)
-  }
+  return bgmEl
 }
 
-/** 想唱歌时调用；AudioContext 未解锁时先记账，解锁后立即开始 */
+function tryPlayBgm() {
+  if (!unlocked || muted) return
+  const el = getBgm()
+  if (!el.paused) return // 防叠音：切钓场/标签重复调用只播一份
+  void el.play().catch(() => {
+    /* 浏览器尚未放行时静默等下一次手势 */
+  })
+}
+
+/** 想唱歌时调用；音频未解锁时先记账，解锁后立即开始 */
 export function startSong() {
   songWanted = true
-  if (songTimer || !audioCtx) return
-  playSongLoop()
-  songTimer = setInterval(playSongLoop, SONG_LEN_MS)
+  tryPlayBgm()
 }
 
 export function stopSong() {
   songWanted = false
-  if (songTimer) {
-    clearInterval(songTimer)
-    songTimer = null
-  }
+  bgmEl?.pause()
 }
 
 /** 解锁后若有待播的歌则开始（供 unlockAudio 调用） */
 export function resumeSongIfWanted() {
-  if (songWanted && !songTimer && audioCtx) {
-    playSongLoop()
-    songTimer = setInterval(playSongLoop, SONG_LEN_MS)
-  }
+  if (songWanted) tryPlayBgm()
 }

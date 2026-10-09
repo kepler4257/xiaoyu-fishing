@@ -9,7 +9,10 @@ import SceneCanvas from '@/sections/SceneCanvas'
 import ShopSection from '@/sections/ShopSection'
 import CodexSection from '@/sections/CodexSection'
 import CharacterSection from '@/sections/CharacterSection'
+import StockSection from '@/sections/StockSection'
 import CatchLog from '@/sections/CatchLog'
+import { STOCKS } from '@/game/stocks'
+import { Toaster } from '@/components/ui/sonner'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +21,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 
-type Tab = 'shop' | 'codex' | 'character'
+type Tab = 'shop' | 'stocks' | 'codex' | 'character'
 
 export default function Home() {
   const game = useFishingGame()
@@ -32,7 +35,8 @@ export default function Home() {
   }, [])
 
   const biting = game.phase === 'bite'
-  const showCatch = game.phase === 'result' && !!game.lastCatch
+  const showCatch =
+    game.phase === 'result' && !!game.lastCatch && tab !== 'stocks'
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-4 text-slate-200">
@@ -133,6 +137,7 @@ export default function Home() {
         {(
           [
             ['shop', '商店'],
+            ['stocks', '交易所'],
             ['codex', '图鉴'],
             ['character', '角色'],
           ] as Array<[Tab, string]>
@@ -155,6 +160,16 @@ export default function Home() {
             onBuy={game.buyUpgrade}
             shrineStage={game.shrineStage}
             onBuildShrine={game.buildShrineStage}
+          />
+        )}
+        {tab === 'stocks' && (
+          <StockSection
+            gold={game.gold}
+            stocks={game.stockUi}
+            onTrade={game.trade}
+            companyLv={game.companyLv}
+            onUpgradeCompany={game.upgradeCompany}
+            shrineBuilt={game.shrineStage >= 5}
           />
         )}
         {tab === 'codex' && <CodexSection codex={game.codex} />}
@@ -287,6 +302,52 @@ export default function Home() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 内幕消息弹窗（偶发，可关闭） */}
+      <Dialog
+        open={game.insiderTip !== null}
+        onOpenChange={(open) => {
+          if (!open) game.setInsiderTip(null)
+        }}
+      >
+        <DialogContent className="pixel-border-gold border-0 bg-[#1e1e2e] text-slate-200 sm:max-w-xs">
+          {game.insiderTip !== null && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-gold text-center font-mono">
+                  🕵️ 内幕消息
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  内幕消息
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 py-2 text-center text-sm leading-6 text-slate-300">
+                <p>
+                  与「
+                  <span className="text-gold font-bold">
+                    {STOCKS[game.insiderTip].name}
+                  </span>
+                  」关联的物资近期紧缺……
+                </p>
+                <p className="text-xs text-slate-400">
+                  {STOCKS[game.insiderTip].tip}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  （小玉竖起耳朵：听起来要涨了喵？）
+                </p>
+                <button
+                  className="pixel-btn pixel-btn-gold mt-2 px-6 py-2 text-sm font-bold"
+                  onClick={() => game.setInsiderTip(null)}
+                >
+                  知道了喵
+                </button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Toaster position="top-center" richColors />
     </div>
   )
 }

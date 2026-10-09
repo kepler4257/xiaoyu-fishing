@@ -9,6 +9,17 @@ import {
   SHRINE_MAX_STAGE,
   SHRINE_INCOME_MULT,
 } from '@/game/shrine'
+import {
+  STOCKS,
+  TICK_MS,
+  initStockState,
+  engineTick,
+  companyCost,
+  companyIncome,
+  COMPANY_MAX_LV,
+  type StockState,
+  type Candle,
+} from '@/game/stocks'
 
 export type Phase = 'idle' | 'casting' | 'waiting' | 'bite' | 'result'
 
@@ -49,6 +60,15 @@ interface SaveData {
   shrineStage?: number
   /** 神社建成时的累计金币（生涯成就展示用） */
   shrineCompletedGold?: number
+  /** 交易所 */
+  stockPrices?: number[]
+  stockRegimes?: number[]
+  stockTick?: number
+  stockHoldings?: number[]
+  stockReversion?: boolean[]
+  stockCandles?: Candle[][]
+  stockCosts?: number[]
+  companyLv?: number
   version?: number
 }
 
@@ -157,6 +177,19 @@ export function useFishingGame() {
   >(loaded?.shrineCompletedGold ?? null)
   const [shrineThanks, setShrineThanks] = useState(false)
 
+  // ---- 交易所（存档迁移：旧档全部为默认值） ----
+  const initStocks = initStockState(loaded ?? undefined)
+  const initCompanyLv = Math.max(
+    0,
+    Math.min(COMPANY_MAX_LV, Math.floor(loaded?.companyLv ?? 0)),
+  )
+  // 价格引擎状态放 ref（随机游走不能放 setState updater，StrictMode 会双调用）
+  const stockRef = useRef<StockState>(initStocks)
+  const [stockUi, setStockUi] = useState<StockState>(initStocks)
+  const [companyLv, setCompanyLv] = useState<number>(initCompanyLv)
+  const [insiderTip, setInsiderTip] = useState<number | null>(null)
+  const lastTipAt = useRef(0)
+
   const phaseRef = useRef(phase)
   phaseRef.current = phase
   const phaseEndAt = useRef(0)
@@ -175,6 +208,8 @@ export function useFishingGame() {
   unlockedRef.current = unlockedSpots
   const shrineRef = useRef(shrineStage)
   shrineRef.current = shrineStage
+  const companyRef = useRef(companyLv)
+  companyRef.current = companyLv
   const logId = useRef(0)
 
   // 场景快照（供 canvas rAF 读取，phaseStart 用 performance 时钟）
@@ -407,14 +442,22 @@ export function useFishingGame() {
       currentSpot,
       shrineStage,
       shrineCompletedGold: shrineCompletedGold ?? undefined,
-      version: 3,
+      stockPrices: stockRef.current.prices,
+      stockRegimes: stockRef.current.regimes,
+      stockTick: stockRef.current.tick,
+      stockHoldings: stockRef.current.holdings,
+      stockReversion: stockRef.current.reversion,
+      stockCandles: stockRef.current.candles,
+      stockCosts: stockRef.current.costBasis,
+      companyLv,
+      version: 4,
     }
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(data))
     } catch {
       /* ignore */
     }
-  }, [gold, totalCatches, totalGoldEarned, playSeconds, autoFishing, muted, upgrades, codex, expectedGoldPerMin, unlockedSpots, currentSpot, shrineStage, shrineCompletedGold])
+  }, [gold, totalCatches, totalGoldEarned, playSeconds, autoFishing, muted, upgrades, codex, expectedGoldPerMin, unlockedSpots, currentSpot, shrineStage, shrineCompletedGold, companyLv])
 
   const saveRef = useRef(saveNow)
   saveRef.current = saveNow
@@ -546,6 +589,101 @@ export function useFishingGame() {
     else stopSong()
   }, [shrineStage, autoFishing])
 
+  // ---- 交易所 tick：每 10 秒价格变动 + 公司产出（切 tab 不停） ----
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // 价格引擎
+      const { next, upEntrants } = engineTick(stockRef.current)
+      stockRef.current = next
+      setStockUi(next)
+      // 内幕消息：某只股票进入上涨周期时小概率弹窗（冷却 5 分钟，不打断操作）
+      if (
+        upEntrants.length > 0 &&
+        Date.now() - lastTipAt.current > 5 * 60_000 &&
+        Math.random() < 0.35
+      ) {
+        lastTipAt.current = Date.now()
+        setInsiderTip(upEntrants[Math.floor(Math.random() * upEntrants.length)])
+      }
+      // 小玉公司产出（吃神社 ×2 加成）
+      const lv = companyRef.current
+      if (lv > 0) {
+        const mult = shrineRef.current >= SHRINE_MAX_STAGE ? SHRINE_INCOME_MULT : 1
+        const income = companyIncome(lv) * mult
+        setGold((g) => g + income)
+        setTotalGoldEarned((g) => g + income)
+      }
+    }, TICK_MS)
+    return () => clearInterval(timer)
+  }, [])
+
+  // ---- 股票交易（StrictMode 安全：先算后 set，ref 为准） ----
+  const trade = useCallback(
+    (
+      idx: number,
+      side: 'buy' | 'sell',
+      qty: number | 'all',
+    ): { ok: boolean; msg?: string } => {
+      const s = stockRef.current
+      const def = STOCKS[idx]
+      if (!def) return { ok: false }
+      const price = s.prices[idx]
+      if (side === 'buy') {
+        const n = qty === 'all' ? Math.floor(goldRef.current / price) : qty
+        const cost = Math.ceil(price * n)
+        if (n <= 0 || cost > goldRef.current) {
+          sfx.denied()
+          return { ok: false, msg: '金币不足' }
+        }
+        sfx.purchase()
+        setGold((g) => g - cost)
+        const holdings = [...s.holdings]
+        holdings[idx] += n
+        // 买入：成本按实付金额加权累计
+        const costBasis = [...s.costBasis]
+        costBasis[idx] += cost
+        stockRef.current = { ...s, holdings, costBasis }
+        setStockUi(stockRef.current)
+        return { ok: true }
+      }
+      const have = s.holdings[idx]
+      const n = qty === 'all' ? have : qty
+      if (n <= 0 || n > have) {
+        sfx.denied()
+        return { ok: false, msg: '股票不足' }
+      }
+      sfx.purchase()
+      const gain = Math.floor(price * n)
+      setGold((g) => g + gain)
+      const holdings = [...s.holdings]
+      holdings[idx] -= n
+      // 卖出：按股数比例摊薄成本；清仓归零
+      const costBasis = [...s.costBasis]
+      costBasis[idx] =
+        holdings[idx] <= 0 ? 0 : (s.costBasis[idx] * (have - n)) / have
+      stockRef.current = { ...s, holdings, costBasis }
+      setStockUi(stockRef.current)
+      return { ok: true }
+    },
+    [],
+  )
+
+  // ---- 小玉公司升级 ----
+  const upgradeCompany = useCallback((): { ok: boolean; msg?: string } => {
+    const lv = companyRef.current
+    if (lv >= COMPANY_MAX_LV) return { ok: false }
+    const cost = companyCost(lv)
+    if (goldRef.current < cost) {
+      sfx.denied()
+      return { ok: false, msg: '金币不足' }
+    }
+    sfx.purchase()
+    setGold((g) => g - cost)
+    setCompanyLv(lv + 1)
+    companyRef.current = lv + 1
+    return { ok: true }
+  }, [])
+
   const statusText =
     phase === 'idle'
       ? autoFishing
@@ -590,5 +728,11 @@ export function useFishingGame() {
     shrineThanks,
     setShrineThanks,
     shrineCompletedGold,
+    stockUi,
+    trade,
+    insiderTip,
+    setInsiderTip,
+    companyLv,
+    upgradeCompany,
   }
 }
