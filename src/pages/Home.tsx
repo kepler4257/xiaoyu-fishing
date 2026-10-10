@@ -349,6 +349,40 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
+      {/* 金融危机警报弹窗（红色警报，可关闭） */}
+      <Dialog
+        open={game.crisisAlert}
+        onOpenChange={(open) => {
+          if (!open) game.setCrisisAlert(false)
+        }}
+      >
+        <DialogContent className="border-2 border-red-500 bg-[#2e1212] text-slate-200 sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="animate-pulse text-center font-mono text-lg font-black text-red-400">
+              💥 金融危机！
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              金融危机警报
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2 text-center text-sm leading-6 text-red-200">
+            <p className="font-bold">市场恐慌蔓延，所有股票崩盘式暴跌……</p>
+            <p className="text-xs text-red-300/80">
+              一分钟内所有股票将跌至现价的 50%，任何走势都无法幸免喵！
+            </p>
+            <p className="text-[10px] text-slate-400">
+              （危机过后均值回归会慢慢拉回价格……也许是抄底的机会？）
+            </p>
+            <button
+              className="pixel-btn mt-2 border-red-400 px-6 py-2 text-sm font-bold text-red-300"
+              onClick={() => game.setCrisisAlert(false)}
+            >
+              顶住！
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Toaster position="top-center" richColors />
     </div>
   )

@@ -193,6 +193,7 @@ export function useFishingGame() {
   const [companyLv, setCompanyLv] = useState<number>(initCompanyLv)
   const [insiderTip, setInsiderTip] = useState<number | null>(null)
   const lastTipAt = useRef(0)
+  const [crisisAlert, setCrisisAlert] = useState(false)
   // 历史已实现盈亏 / 历史买入总成本（旧档缺字段从 0 起累计）
   const initRealized =
     typeof loaded?.stockRealizedPnl === 'number' ? loaded.stockRealizedPnl : 0
@@ -610,9 +611,14 @@ export function useFishingGame() {
   useEffect(() => {
     const timer = setInterval(() => {
       // 价格引擎
-      const { next, upEntrants } = engineTick(stockRef.current)
+      const { next, upEntrants, crisisStarted } = engineTick(stockRef.current)
       stockRef.current = next
       setStockUi(next)
+      // 金融危机：触发即弹红色警报（可关闭），危机在引擎内持续 6 tick
+      if (crisisStarted) {
+        sfx.denied()
+        setCrisisAlert(true)
+      }
       // 内幕消息：某只股票进入上涨周期时小概率弹窗（冷却 5 分钟，不打断操作）
       if (
         upEntrants.length > 0 &&
@@ -758,5 +764,7 @@ export function useFishingGame() {
     upgradeCompany,
     stockRealizedPnl: realizedPnl,
     stockTotalBought: totalBought,
+    crisisAlert,
+    setCrisisAlert,
   }
 }

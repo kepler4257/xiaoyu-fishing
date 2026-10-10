@@ -29,6 +29,17 @@ export const CANDLE_TICKS = 3
 /** 每股最多保留 150 根（≈25 个小周期，远超展示的 3~5 个） */
 export const MAX_CANDLES = 150
 
+// ---------- 金融危机随机事件 ----------
+/** 触发阈值：持仓总市值（Σ现价×持仓）≥ 1 亿金币才可能触发 */
+export const CRISIS_THRESHOLD = 100_000_000
+/** 每个小周期（18 tick = 3 分钟）在周期切换点判定一次 */
+export const CRISIS_CHANCE = 0.15
+/** 危机持续 6 tick（1 分钟），每 tick ×0.891，6 tick 恰好腰斩 */
+export const CRISIS_TICKS = 6
+export const CRISIS_DECAY = Math.pow(0.5, 1 / CRISIS_TICKS)
+/** 危机结束后 60 tick（10 分钟）内不再触发 */
+export const CRISIS_COOLDOWN_TICKS = 60
+
 export interface StockState {
   prices: number[]
   prevPrices: number[]
@@ -46,6 +57,10 @@ export interface StockState {
   /** 每股正在成型的蜡烛（未满 3 tick） */
   forming: (Candle | null)[]
   formingTicks: number[]
+  /** 金融危机剩余 tick（0 = 无危机；不持久化，读档即恢复正常） */
+  crisisTicks: number
+  /** 危机冷却剩余 tick（不持久化） */
+  crisisCooldown: number
 }
 
 /** 读档迁移：字段缺失/长度不对一律安全兜底 */
@@ -105,6 +120,9 @@ export function initStockState(saved?: {
     candles,
     forming: STOCKS.map(() => null),
     formingTicks: STOCKS.map(() => 0),
+    // 危机状态不持久化：读档即恢复正常
+    crisisTicks: 0,
+    crisisCooldown: 0,
   }
 }
 
@@ -112,6 +130,8 @@ export interface TickResult {
   next: StockState
   /** 本 tick 进入上涨周期的股票下标（供内幕消息抽奖） */
   upEntrants: number[]
+  /** 本 tick 触发了金融危机（供弹警报弹窗） */
+  crisisStarted: boolean
 }
 
 /** 推进一个 tick（纯函数，可安全复算） */
@@ -119,6 +139,9 @@ export function engineTick(s: StockState): TickResult {
   const upEntrants: number[] = []
   let regimes = s.regimes
   let tick = s.tick + 1
+  let crisisStarted = false
+  let crisisTicks = s.crisisTicks
+  let crisisCooldown = Math.max(0, s.crisisCooldown - 1)
   if (tick >= CYCLE_TICKS) {
     // 新周期：每只独立掷骰 15% 涨 / 15% 跌 / 70% 震荡
     tick = 0
@@ -126,32 +149,56 @@ export function engineTick(s: StockState): TickResult {
       const r = Math.random()
       return r < 0.15 ? 1 : r < 0.3 ? 2 : 0
     })
-  }
-  const prices = s.prices.map((p0, i) => {
-    const base = STOCKS[i].base
-    let p = p0
-    const regime = regimes[i]
-    if (regime === 1) {
-      p *= 1.04 // 18 tick 累计 ≈ +102%
-      if (s.tick === CYCLE_TICKS - 1 || s.regimes[i] !== 1) {
-        // 刚进入上涨周期
-        if (!upEntrants.includes(i)) upEntrants.push(i)
+    // ---- 金融危机判定：周期切换点（3 分钟一次），市值过亿且不在冷却中 ----
+    if (crisisTicks === 0 && crisisCooldown === 0) {
+      const marketValue = s.prices.reduce(
+        (sum, p, i) => sum + p * s.holdings[i],
+        0,
+      )
+      if (marketValue >= CRISIS_THRESHOLD && Math.random() < CRISIS_CHANCE) {
+        crisisTicks = CRISIS_TICKS
+        crisisStarted = true
       }
-    } else if (regime === 2) {
-      p *= 0.955 // 18 tick 累计 ≈ -56%
-    } else {
-      p *= 1 + (Math.random() - 0.5) * 0.24 // 震荡：单 tick ±12%，周期振幅约 ±50%
     }
-    // 均值回归：偏离基准 ±300% 触发，之后每 tick 拉向基准 8%
-    let rev = s.reversion[i]
-    if (!rev && (p > base * 4 || p < base * 0.25)) rev = true
-    if (rev) {
-      p += (base - p) * 0.08
-      if (p > base * 0.5 && p < base * 2.5) rev = false
-    }
-    s.reversion[i] = rev
-    return Math.max(1, Math.round(p * 100) / 100) // 底价 1 金币
-  })
+  }
+  let prices: number[]
+  if (crisisTicks > 0) {
+    // 危机中：覆盖周期走势与均值回归，全体每 tick ×0.891，6 tick 恰好腰斩
+    prices = s.prices.map((p) =>
+      Math.max(1, Math.round(p * CRISIS_DECAY * 100) / 100),
+    )
+    crisisTicks -= 1
+    if (crisisTicks === 0) crisisCooldown = CRISIS_COOLDOWN_TICKS
+    // 周期计时冻结：危机结束后从原周期位置恢复
+    tick = s.tick
+    regimes = s.regimes
+  } else {
+    prices = s.prices.map((p0, i) => {
+      const base = STOCKS[i].base
+      let p = p0
+      const regime = regimes[i]
+      if (regime === 1) {
+        p *= 1.04 // 18 tick 累计 ≈ +102%
+        if (s.tick === CYCLE_TICKS - 1 || s.regimes[i] !== 1) {
+          // 刚进入上涨周期
+          if (!upEntrants.includes(i)) upEntrants.push(i)
+        }
+      } else if (regime === 2) {
+        p *= 0.955 // 18 tick 累计 ≈ -56%
+      } else {
+        p *= 1 + (Math.random() - 0.5) * 0.24 // 震荡：单 tick ±12%，周期振幅约 ±50%
+      }
+      // 均值回归：偏离基准 ±300% 触发，之后每 tick 拉向基准 8%
+      let rev = s.reversion[i]
+      if (!rev && (p > base * 4 || p < base * 0.25)) rev = true
+      if (rev) {
+        p += (base - p) * 0.08
+        if (p > base * 0.5 && p < base * 2.5) rev = false
+      }
+      s.reversion[i] = rev
+      return Math.max(1, Math.round(p * 100) / 100) // 底价 1 金币
+    })
+  }
   // ---- K 线聚合：3 个 tick 收盘价合成一根 OHLC 蜡烛 ----
   const forming: (Candle | null)[] = []
   const formingTicks: number[] = []
@@ -184,8 +231,11 @@ export function engineTick(s: StockState): TickResult {
       candles,
       forming,
       formingTicks,
+      crisisTicks,
+      crisisCooldown,
     },
     upEntrants,
+    crisisStarted,
   }
 }
 

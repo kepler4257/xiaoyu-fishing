@@ -214,7 +214,14 @@ export default function StockSection({
 
       {/* 总盈亏汇总 */}
       <div className="pixel-panel flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2">
-        <span className="text-xs text-slate-400">📊 全部持仓</span>
+        <span className="text-xs text-slate-400">
+          📊 全部持仓
+          {stocks.crisisTicks > 0 && (
+            <span className="ml-2 animate-pulse rounded border border-red-500 bg-red-950/60 px-1.5 py-0.5 font-mono text-[10px] font-bold text-red-400">
+              💥 金融危机中 · 剩余 {stocks.crisisTicks * 10}s
+            </span>
+          )}
+        </span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {hasHolding ? (
             <span
